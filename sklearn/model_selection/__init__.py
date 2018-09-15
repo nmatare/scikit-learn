@@ -1,5 +1,6 @@
 from ._split import BaseCrossValidator
 from ._split import KFold
+from ._split import HVBlock
 from ._split import GroupKFold
 from ._split import StratifiedKFold
 from ._split import TimeSeriesSplit
