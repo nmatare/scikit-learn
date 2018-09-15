@@ -32,8 +32,9 @@ from ..utils.fixes import signature, comb
 from ..utils.fixes import _Iterable as Iterable
 from ..base import _pprint
 
-__all__ = ['BaseCrossValidator',
+__all__ = ('BaseCrossValidator',
            'KFold',
+           'HVBlock',
            'GroupKFold',
            'LeaveOneGroupOut',
            'LeaveOneOut',
@@ -47,7 +48,7 @@ __all__ = ['BaseCrossValidator',
            'StratifiedShuffleSplit',
            'PredefinedSplit',
            'train_test_split',
-           'check_cv']
+           'check_cv')
 
 
 NSPLIT_WARNING = (
@@ -442,6 +443,7 @@ class KFold(_BaseKFold):
             start, stop = current, current + fold_size
             yield indices[start:stop]
             current = stop
+
 
 class HVBlock(_BaseKFold):
     """HV-Block cross-validator
