@@ -446,22 +446,29 @@ class KFold(_BaseKFold):
 
 
 class HVBlock(_BaseKFold):
-    """HV-Block cross-validator
+  """HV-Block cross-validator
     
     Provides train/test(validate) indices to split data in train/test(validate) 
     sets. First, form an ordered test set of size 2 * v_block + 1. Next, remove 
     h_block observations on either side of this testing set, with the remaining 
-    (n_samples - 2v_block - 2h_block - 1) observations forming 
+    (n_samples - 2v_block - 1 - 2h_block) observations forming 
     the training set, where n_samples is the total number of observations.
     
-    Alternatively, specifying n_splits (the default) will automatically 
-    split the data  into train/test sets, using a default h_block of 25% of the
-    n_samples as the h_block size between training and testing sets.
+    Alternatively, by specifying n_splits (the default) the `split` method will 
+    automatically attempt to split the data into train/test sets, using a 
+    default h_block of 0.25 * n_samples. Please note that this is an 
+    approximate solution, and may not yield the exact number of n_splits 
+    (due to rounding).
+
+    Be advised that if you specify both h_block and v_block, 
+    n_splits will be ignored. Equally, n_splits will be ignored when v_block 
+    is specified. You may jointly specify n_splits and h_block (or gamma), 
+    however. This behavior is due to compatibility with the base class.
     
-    In each successive split, test indices are higher than before, and thus
+    In each successive split, test indices are ordered, and thus
     shuffling in the cross validator is inappropriate. To return another 
-    data-split variation along the same data, modify h_block or gamma, and 
-    v_block or, alternatively, the n_splits parameter. 
+    data-split variation along the same data, modify h_block or gamma and 
+    v_block or, alternatively, the number of folds (n_splits). 
 
     Please see the below referenced papers for more information.
 
@@ -485,11 +492,10 @@ class HVBlock(_BaseKFold):
 
     gamma : float, optional 
         A float between 0 and 1 specifying the percentage of observations to
-        'hold-out' or discard before and after the validation set. Will override
-        h_block, if specified. Burman et al. (1994) recommend 0 < gamma < 1/2n, 
-        where n is given as the total number of observations. The authors 
-        recommend gamma = 0.25, noting that it "appears to work well in a 
-        wide range of situations".
+        'hold-out' or discard before and after the validation set. 
+        Burman et al. (1994) recommend 0 < gamma < 1/2n, where n is given as 
+        the total number of observations. The authors recommend gamma = 0.25, 
+        noting that it "appears to work well in a wide range of situations".
 
     Notes
     -----
@@ -501,8 +507,8 @@ class HVBlock(_BaseKFold):
     >>> from sklearn.model_selection import HVBlock
     >>> X = np.array([[1, 2], [3, 4], [1, 2], [3, 4], [1, 2], [3, 4],
                       [1, 2], [3, 4], [1, 2], [3, 4], [1, 2], [3, 4]])
-    >>> y = np.array([1, 2, 3, 4, 5, 6])
-    >>> hvblock = HVBlock(n_splits=2)
+    >>> y = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    >>> hvblock = HVBlock(v_block=2, h_block=1, gamma=None)
     >>> print(hvblock) # doctest: +NORMALIZE_WHITESPACE
     HVBlock(gamma=0.25, h_block=None, n_splits=2, v_block=None) 
     >>> for train_index, test_index in hvblock.split(X):
@@ -510,8 +516,12 @@ class HVBlock(_BaseKFold):
     ...     X_train, X_test = X[train_index], X[test_index]
     ...     y_train, y_test = y[train_index], y[test_index]
     ... 
-    TRAIN: [2 3 4 5 6] TEST: [9]
-    TRAIN: [3 4 5 6 7] TEST: [0]
+    TRAIN: [ 7  8  9 10 11] TEST: [1 2 3 4 5]
+    TRAIN: [ 0  8  9 10 11] TEST: [2 3 4 5 6]
+    TRAIN: [ 0  1  9 10 11] TEST: [3 4 5 6 7]
+    TRAIN: [ 0  1  2 10 11] TEST: [4 5 6 7 8]
+    TRAIN: [ 0  1  2  3 11] TEST: [5 6 7 8 9]
+    TRAIN: [0 1 2 3 4] TEST: [ 6  7  8  9 10]
 
     See also
     --------
@@ -519,7 +529,8 @@ class HVBlock(_BaseKFold):
         Special case of hv-block cross-validation when h = v = 0
     
     LeavePOut
-        Special case of hv-block cross-validation when h = 0 and v > 0
+        Special case of hv-block cross-validation when h = 0 and v > 0, where
+        p = 2 * v + 1
 
     H-Block (Not explicitly implemented)
         Special case of hv-block cross-validation when h > 0 and v = 0
@@ -534,12 +545,41 @@ class HVBlock(_BaseKFold):
     A cross-validatory method for dependent data, Biometrika, 
     Volume 81, Issue 2, 1 June 1994, Pages 351–358
     """
+
     def __init__(self, n_splits='warn', v_block=None, h_block=None, gamma=0.25):
         if n_splits is 'warn':
             warnings.warn(NSPLIT_WARNING, FutureWarning)
             n_splits = 3
         super(HVBlock, self).__init__(n_splits, shuffle=False, 
                                       random_state=None)
+
+        if v_block and (v_block < 0 or not isinstance(v_block, int)):
+            raise ValueError(
+                "v_block (validation size / 2 - 1) must be a non-negative "
+                "integer, got v_block={0}.".format(v_block))
+
+        if h_block and (h_block < 0 or not isinstance(h_block, int)):
+            raise ValueError(
+                "h_block (hold-out size / 2) must be a non-negative integer, "
+                "got h_block={0}.".format(h_block))
+
+        if (gamma and (not isinstance(gamma, (int, float)) or 
+            gamma > 1 or gamma < 0)): 
+            raise ValueError(
+                "gamma must be a number between 0 and 1, "
+                "got gamma={0}.".format(gamma))
+
+        if (gamma is not None and gamma <= 1 and 
+            h_block is not None and h_block >= 0):
+            raise ValueError(
+                "Please specify only one of gamma or h_block, but not both.")
+
+        if (h_block is not None and h_block >= 0 
+            and (v_block is not None and v_block >= 0 
+                or gamma is not None and gamma >= 0) 
+            or v_block is not None and v_block >= 0):
+            n_splits = 0 # ugly, but preserve compatibility with _BaseKFold 
+
         self.v_block = v_block
         self.h_block = h_block
         self.n_splits = n_splits
@@ -572,27 +612,24 @@ class HVBlock(_BaseKFold):
         n_samples = _num_samples(X)
         indices = np.arange(n_samples)
 
-        if self.v_block is not None and self.h_block is not None:
-            self.n_splits = 0 # preserve compatibility with _BaseKFold 
- 
-        if self.gamma and (self.n_splits and self.h_block is None):
+        if self.gamma is not None and self.gamma >= 0 and self.h_block is None:
             self.h_block = int(self.gamma * n_samples)
 
         if self.n_splits:
-            self.v_block = int((n_samples 
-                                - self.n_splits - (2 * self.h_block)) / 2)
-        if self.v_block < 1:
+            self.v_block = (n_samples - (2 * self.h_block)) // self.n_splits
+
+        if self.v_block < 0:
             raise ValueError(
-                ("Cannot create n_splits={0} from {1} total number of samples "
-                 "Please reduce the number of splits, or reduce h_block or "
-                 "gamma").format(self.n_splits, n_samples))
+                ("Cannot create n_splits>={0} from {1} total number of samples "
+                 "Please reduce the number of splits, or reduce h_block and/or "
+                 "gamma.").format(self.n_splits, n_samples))
 
         if (n_samples - ((self.v_block * 2 + 1) + (2 * self.h_block)) 
             < self.n_splits - 1):
             raise ValueError(
                 ("Cannot have number of h-blocks={0} and v-blocks={1} greater "
-                 "than the total number of samples: {2}. Please reduce h_block,"
-                 " v_block and/or gamma.").format(
+                 "than the total number of samples: {2}. Please reduce v_block,"
+                 " h_block and/or gamma.").format(
                  self.h_block, self.v_block, n_samples)) 
 
         test_starts = range(
@@ -602,9 +639,9 @@ class HVBlock(_BaseKFold):
         for test_start in test_starts:
             _block = range(test_start - self.h_block - self.v_block, 
                            test_start + self.h_block + self.v_block + 1)
-            yield (indices[test_start - self.v_block:
-                           test_start + self.v_block + 1],
-                   indices[np.in1d(range(n_samples), _block, invert=True)])
+            yield (indices[np.in1d(range(n_samples), _block, invert=True)], 
+                   indices[test_start - self.v_block:
+                           test_start + self.v_block + 1])
 
 
 class GroupKFold(_BaseKFold):
