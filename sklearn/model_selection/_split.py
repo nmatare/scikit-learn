@@ -446,7 +446,7 @@ class KFold(_BaseKFold):
 
 
 class HVBlock(_BaseKFold):
-  """HV-Block cross-validator
+    """HV-Block cross-validator
     
     Provides train/test(validate) indices to split data in train/test(validate) 
     sets. First, form an ordered test set of size 2 * v_block + 1. Next, remove 
@@ -550,8 +550,8 @@ class HVBlock(_BaseKFold):
         if n_splits is 'warn':
             warnings.warn(NSPLIT_WARNING, FutureWarning)
             n_splits = 3
-        super(HVBlock, self).__init__(n_splits, shuffle=False, 
-                                      random_state=None)
+            super(HVBlock, self).__init__(n_splits, shuffle=False, 
+                                          random_state=None)
 
         if v_block and (v_block < 0 or not isinstance(v_block, int)):
             raise ValueError(
