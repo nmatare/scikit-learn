@@ -550,8 +550,8 @@ class HVBlock(_BaseKFold):
         if n_splits is 'warn':
             warnings.warn(NSPLIT_WARNING, FutureWarning)
             n_splits = 3
-            super(HVBlock, self).__init__(n_splits, shuffle=False, 
-                                          random_state=None)
+        super(HVBlock, self).__init__(n_splits, shuffle=False, 
+                                      random_state=None)
 
         if v_block and (v_block < 0 or not isinstance(v_block, int)):
             raise ValueError(
